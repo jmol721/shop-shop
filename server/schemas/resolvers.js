@@ -53,37 +53,43 @@ const resolvers = {
       throw new AuthenticationError('Not logged in');
     },
     checkout: async (parent, args, context) => {
+      const url = new URL(context.headers.referer).origin;
       const order = new Order({ products: args.products });
-      const { products } = await order.populate('products').execPopulate();
       const line_items = [];
 
+      const { products } = await order.populate('products').execPopulate();
+      console.log('Look here', line_items, products);
+
       for (let i = 0; i < products.length; i++) {
+        console.log(i);
         // generate product id
         const product = await stripe.products.create({
           name: products[i].name,
-          description: products[i].description
+          description: products[i].description,
+          images: [`${url}/images/${products[i].image}`]
         });
-
+        console.log('after product call');
         // generate price id using the product id
         const price = await stripe.prices.create({
           product: product.id,
           unit_amount: products[i].price * 100,
           currency: 'usd',
         });
-
+        console.log('after price call');    
         // add price id to the line items array
         line_items.push({
           price: price.id,
           quantity: 1
         });
+        console.log('Look here 2', line_items, price.id);
       }
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items,
         mode: 'payment',
-        success_url: 'https://example.com/success?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'https://example.com/cancel'
+        success_url: `${url}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${url}/`
       });
       
       return { session: session.id };
